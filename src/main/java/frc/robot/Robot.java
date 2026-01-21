@@ -1,129 +1,215 @@
-// Copyright (c) FIRST and other WPILib contributors.
-// Open Source Software; you can modify and/or share it under the terms of
-// the WPILib BSD license file in the root directory of this project.
-
 package frc.robot;
 
-import edu.wpi.first.hal.HAL;
-import edu.wpi.first.hal.FRCNetComm.tResourceType;
-import edu.wpi.first.wpilibj.TimedRobot;
+import java.io.File;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.BiConsumer;
+
+import edu.wpi.first.hal.AllianceStationID;
+import edu.wpi.first.wpilibj.Alert;
+import edu.wpi.first.wpilibj.Alert.AlertType;
+import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.IterativeRobotBase;
+import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.Watchdog;
+import edu.wpi.first.wpilibj.simulation.DriverStationSim;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
-/**
- * The VM is configured to automatically run this class, and to call the
- * functions corresponding to
- * each mode, as described in the TimedRobot documentation. If you change the
- * name of this class or
- * the package after creating this project, you must also update the
- * build.gradle file in the
- * project.
- */
-public class Robot extends TimedRobot {
-  private Command m_autonomousCommand;
+import com.ctre.phoenix6.SignalLogger;
 
-  private RobotContainer m_robotContainer;
+import org.littletonrobotics.junction.LogFileUtil;
+import org.littletonrobotics.junction.LoggedRobot;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.NT4Publisher;
+import org.littletonrobotics.junction.wpilog.WPILOGReader;
+import org.littletonrobotics.junction.wpilog.WPILOGWriter;
 
-  /**
-   * This function is run when the robot is first started up and should be used
-   * for any
-   * initialization code.
-   */
-  @Override
-  public void robotInit() {
-    // Instantiate our RobotContainer. This will perform all our button bindings,
-    // and put our
-    // autonomous chooser on the dashboard.
-    m_robotContainer = new RobotContainer();
+import frc.robot.Constants.Mode;
+import frc.robot.util.Alerts;
 
-    // Used to track usage of Kitbot code, please do not remove.
-    HAL.report(tResourceType.kResourceType_Framework, 10);
-  }
+public class Robot extends LoggedRobot {
+    private Command autonomousCommand;
 
-  /**
-   * This function is called every 20 ms, no matter the mode. Use this for items
-   * like diagnostics
-   * that you want ran during disabled, autonomous, teleoperated and test.
-   *
-   * <p>
-   * This runs after the mode specific periodic functions, but before LiveWindow
-   * and
-   * SmartDashboard integrated updating.
-   */
-  @Override
-  public void robotPeriodic() {
-    // Runs the Scheduler. This is responsible for polling buttons, adding
-    // newly-scheduled
-    // commands, running already-scheduled commands, removing finished or
-    // interrupted commands,
-    // and running subsystem periodic() methods. This must be called from the
-    // robot's periodic
-    // block in order for anything in the Command-based framework to work.
-    CommandScheduler.getInstance().run();
-  }
+    private final RobotContainer robotContainer;
 
-  /** This function is called once each time the robot enters Disabled mode. */
-  @Override
-  public void disabledInit() {
-  }
+    private final Timer lowBatteryTimer = new Timer();
 
-  @Override
-  public void disabledPeriodic() {
-  }
+    private final Alert lowBatteryAlert = new Alert("Battery charge is low, replace it soon", AlertType.kWarning);
 
-  /**
-   * This autonomous runs the autonomous command selected by your
-   * {@link RobotContainer} class.
-   */
-  @Override
-  public void autonomousInit() {
-    m_autonomousCommand = m_robotContainer.getAutonomousCommand();
+    public Robot() {
+        super(Constants.loopTime);
+        // Add the project metadata to the logs so we can identify which version of the code created a specific log file
+        Logger.recordMetadata("Name", BuildConstants.MAVEN_NAME);
+        Logger.recordMetadata("ProjectName", BuildConstants.MAVEN_NAME);
+        Logger.recordMetadata("BuildDate", BuildConstants.BUILD_DATE);
+        Logger.recordMetadata("GitSHA", BuildConstants.GIT_SHA);
+        Logger.recordMetadata("GitDate", BuildConstants.GIT_DATE);
+        Logger.recordMetadata("GitBranch", BuildConstants.GIT_BRANCH);
+        switch (BuildConstants.DIRTY) {
+            case 0:
+                Logger.recordMetadata("GitDirty", "All changes committed");
+                break;
+            case 1:
+                Logger.recordMetadata("GitDirty", "Uncomitted changes");
+                break;
+            default:
+                Logger.recordMetadata("GitDirty", "Unknown");
+                break;
+        }
 
-    // schedule the autonomous command (example)
-    if (m_autonomousCommand != null) {
-     CommandScheduler.getInstance().schedule(m_autonomousCommand);
+        // Set logging mode depending on the current running mode
+        switch (Constants.currentMode) {
+            case REAL:
+                // Check if log file exists
+                File file = new File("/U/logs");
+                if (!file.exists()) {
+                    Alerts.create("Log USB drive not found!", AlertType.kWarning);
+                }
+            case SIM:
+                Logger.addDataReceiver(new WPILOGWriter());
+                Logger.addDataReceiver(new NT4Publisher());
+                break;
+            default:
+                setUseTiming(false);
+                String logPath =
+                        LogFileUtil.findReplayLog(); // Pull the replay log from AdvantageScope (or prompt the user)
+                Logger.setReplaySource(new WPILOGReader(logPath)); // Read replay log
+                Logger.addDataReceiver(
+                        new WPILOGWriter(LogFileUtil.addPathSuffix(logPath, "_sim"))); // Save outputs to a new log
+                break;
+        }
+
+        Logger.start();
+
+        // Disable automatic Hoot logging
+        SignalLogger.enableAutoLogging(false);
+
+        // Adjust loop overrun warning timeout
+        try {
+            Field watchdogField = IterativeRobotBase.class.getDeclaredField("m_watchdog");
+            watchdogField.setAccessible(true);
+            Watchdog watchdog = (Watchdog) watchdogField.get(this);
+            watchdog.setTimeout(Constants.loopOverrunWarningTimeout);
+        } catch (Exception e) {
+            Alerts.create("Failed to disable loop overrun warnings", AlertType.kWarning);
+        }
+        CommandScheduler.getInstance().setPeriod(Constants.loopOverrunWarningTimeout);
+
+        // Remove controller connection warnings
+        DriverStation.silenceJoystickConnectionWarning(true);
+
+        // Log active commands
+        Map<String, Integer> commandCounts = new HashMap<>();
+        BiConsumer<Command, Boolean> logCommandFunction = (Command command, Boolean active) -> {
+            String name = command.getName();
+            int count = commandCounts.getOrDefault(name, 0) + (active ? 1 : -1);
+            commandCounts.put(name, count);
+            Logger.recordOutput("CommandsUnique/" + name + "_" + Integer.toHexString(command.hashCode()), active);
+            Logger.recordOutput("CommandsAll/" + name, count > 0);
+        };
+        CommandScheduler.getInstance()
+                .onCommandInitialize((Command command) -> logCommandFunction.accept(command, true));
+        CommandScheduler.getInstance().onCommandFinish((Command command) -> logCommandFunction.accept(command, false));
+        CommandScheduler.getInstance()
+                .onCommandInterrupt((Command command) -> logCommandFunction.accept(command, false));
+
+        // Configure brownout voltage
+        RobotController.setBrownoutVoltage(Constants.brownoutVoltage);
+
+        // Restart timers
+        lowBatteryTimer.restart();
+
+        // Init robot container
+        robotContainer = new RobotContainer();
     }
-  }
 
-  /** This function is called periodically during autonomous. */
-  @Override
-  public void autonomousPeriodic() {
-  }
+    @Override
+    public void robotPeriodic() {
+        // Run all active commands and call periodic() on subsystems
+        CommandScheduler.getInstance().run();
 
-  @Override
-  public void teleopInit() {
-    // This makes sure that the autonomous stops running when
-    // teleop starts running. If you want the autonomous to
-    // continue until interrupted by another command, remove
-    // this line or comment it out.
-    if (m_autonomousCommand != null) {
-      m_autonomousCommand.cancel();
+        if (RobotController.getBatteryVoltage() <= Constants.lowBatteryVoltage && DriverStation.isEnabled()) {
+            if (lowBatteryTimer.hasElapsed(Constants.lowBatteryTime)) {
+                lowBatteryAlert.set(true);
+            }
+        } else {
+            lowBatteryAlert.set(false);
+            lowBatteryTimer.reset();
+        }
+
+        // RobotContainer periodic gets called _after_ the subsystems
+        robotContainer.periodic();
     }
-  }
 
-  /** This function is called periodically during operator control. */
-  @Override
-  public void teleopPeriodic() {
-  }
+    @Override
+    public void disabledInit() {}
 
-  @Override
-  public void testInit() {
-    // Cancels all running commands at the start of test mode.
-    CommandScheduler.getInstance().cancelAll();
-  }
+    @Override
+    public void disabledPeriodic() {}
 
-  /** This function is called periodically during test mode. */
-  @Override
-  public void testPeriodic() {
-  }
+    @Override
+    public void disabledExit() {}
 
-  /** This function is called once when the robot is first started up. */
-  @Override
-  public void simulationInit() {
-  }
+    @Override
+    public void autonomousInit() {
+        if (Constants.currentMode == Mode.SIM) {
+            // Choose alliance station based on Constants.simIsRedAlliance
+            if (Constants.simIsRedAlliance) {
+                DriverStationSim.setAllianceStationId(AllianceStationID.Red2);
+            } else {
+                DriverStationSim.setAllianceStationId(AllianceStationID.Blue2);
+            }
+        }
 
-  /** This function is called periodically whilst in simulation. */
-  @Override
-  public void simulationPeriodic() {
-  }
+        autonomousCommand = robotContainer.getAutonomousCommand();
+
+        if (autonomousCommand != null) {
+            CommandScheduler.getInstance().schedule(autonomousCommand);
+        }
+    }
+
+    @Override
+    public void autonomousPeriodic() {}
+
+    @Override
+    public void autonomousExit() {}
+
+    @Override
+    public void teleopInit() {
+        if (Constants.currentMode == Mode.SIM) {
+            // Choose alliance station based on Constants.simIsRedAlliance
+            if (Constants.simIsRedAlliance) {
+                DriverStationSim.setAllianceStationId(AllianceStationID.Red2);
+            } else {
+                DriverStationSim.setAllianceStationId(AllianceStationID.Blue2);
+            }
+        }
+
+        if (autonomousCommand != null) {
+            autonomousCommand.cancel();
+        }
+    }
+
+    @Override
+    public void teleopPeriodic() {}
+
+    @Override
+    public void teleopExit() {}
+
+    @Override
+    public void simulationPeriodic() {}
+
+    @Override
+    public void testInit() {
+        CommandScheduler.getInstance().cancelAll();
+    }
+
+    @Override
+    public void testPeriodic() {}
+
+    @Override
+    public void testExit() {}
 }

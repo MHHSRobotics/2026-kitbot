@@ -1,61 +1,50 @@
-// Copyright (c) FIRST and other WPILib contributors.
-// Open Source Software; you can modify and/or share it under the terms of
-// the WPILib BSD license file in the root directory of this project.
-
 package frc.robot;
 
-/**
- * The Constants class provides a convenient place for teams to hold robot-wide
- * numerical or boolean constants. This class should not be used for any other
- * purpose. All constants should be declared globally (i.e. public static). Do
- * not put anything functional in this class.
- *
- * <p>
- * It is advised to statically import this class (or one of its inner classes)
- * wherever the constants are needed, to reduce verbosity.
- */
+import edu.wpi.first.wpilibj.RobotBase;
+
+import com.ctre.phoenix6.CANBus;
+
 public final class Constants {
-  public static final class DriveConstants {
-    // Motor controller IDs for drivetrain motors
-    public static final int LEFT_LEADER_ID = 1;
-    public static final int LEFT_FOLLOWER_ID = 2;
-    public static final int RIGHT_LEADER_ID = 3;
-    public static final int RIGHT_FOLLOWER_ID = 4;
 
-    // Current limit for drivetrain motors. 60A is a reasonable maximum to reduce
-    // likelihood of tripping breakers or damaging CIM motors
-    public static final int DRIVE_MOTOR_CURRENT_LIMIT = 60;
-  }
+    // Enum for different run modes for the code
+    public static enum Mode {
+        /** Running on a real robot. */
+        REAL,
 
-  public static final class FuelConstants {
-    // Motor controller IDs for Fuel Mechanism motors
-    public static final int FEEDER_MOTOR_ID = 6;
-    public static final int INTAKE_LAUNCHER_MOTOR_ID = 5;
+        /** Running a physics simulator. */
+        SIM,
 
-    // Current limit and nominal voltage for fuel mechanism motors.
-    public static final int FEEDER_MOTOR_CURRENT_LIMIT = 60;
-    public static final int LAUNCHER_MOTOR_CURRENT_LIMIT = 60;
+        /** Replaying from a log file. */
+        REPLAY,
 
-    // Voltage values for various fuel operations. These values may need to be tuned
-    // based on exact robot construction.
-    // See the Software Guide for tuning information
-    public static final double INTAKING_FEEDER_VOLTAGE = -12;
-    public static final double INTAKING_INTAKE_VOLTAGE = 10;
-    public static final double LAUNCHING_FEEDER_VOLTAGE = 9;
-    public static final double LAUNCHING_LAUNCHER_VOLTAGE = 10.6;
-    public static final double SPIN_UP_FEEDER_VOLTAGE = -6;
-    public static final double SPIN_UP_SECONDS = 1;
-  }
+        // WIP physics simulator
+        PHYSICS_SIM,
+    }
 
-  public static final class OperatorConstants {
-    // Port constants for driver and operator controllers. These should match the
-    // values in the Joystick tab of the Driver Station software
-    public static final int DRIVER_CONTROLLER_PORT = 0;
-    public static final int OPERATOR_CONTROLLER_PORT = 1;
+    public static final Mode simMode =
+            Mode.SIM; // Default simulation mode, should be SIM for regular simulation and REPLAY for replays.
 
-    // This value is multiplied by the joystick value when rotating the robot to
-    // help avoid turning too fast and beign difficult to control
-    public static final double DRIVE_SCALING = .7;
-    public static final double ROTATION_SCALING = .8;
-  }
+    public static final Mode currentMode =
+            RobotBase.isReal() ? Mode.REAL : simMode; // Current mode the robot program is in
+
+    public static final double loopTime = 0.02; // Period of main robot loop, 20ms default
+
+    public static final CANBus defaultBus = new CANBus("rio"); // CAN bus used for non-drive motors
+
+    public static final CANBus driveBus = new CANBus("rio"); // CAN bus used for drive motors (rio for kitbot)
+
+    public static final double loopOverrunWarningTimeout =
+            0.2; // Amount of time a robot tick can take before reporting a warning to DS
+
+    public static final double brownoutVoltage = 6.0; // Voltage at which brownout protection occurs
+
+    public static final double lowBatteryVoltage = 11.8; // Voltage at which low battery warning appears
+
+    public static final double lowBatteryTime = 0.5; // How long to wait before reporting low battery
+
+    public static final boolean simIsRedAlliance = false; // Whether simulated FMS is on red alliance
+
+    // Toggles for subsystems
+    public static final boolean driveEnabled = true;
+    public static final boolean fuelEnabled = true;
 }
