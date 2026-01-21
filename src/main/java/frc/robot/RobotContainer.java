@@ -1,96 +1,304 @@
-// Copyright (c) FIRST and other WPILib contributors.
-// Open Source Software; you can modify and/or share it under the terms of
-// the WPILib BSD license file in the root directory of this project.
-
 package frc.robot;
 
-import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.Alert;
+import edu.wpi.first.wpilibj.Alert.AlertType;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
-import edu.wpi.first.wpilibj2.command.button.Trigger;
+import edu.wpi.first.wpilibj2.command.CommandScheduler;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.WaitCommand;
+import edu.wpi.first.wpilibj2.command.button.CommandPS5Controller;
 
-import frc.robot.commands.Drive;
-import frc.robot.commands.Eject;
-import frc.robot.commands.ExampleAuto;
-import frc.robot.commands.Intake;
-import frc.robot.commands.LaunchSequence;
-import frc.robot.subsystems.CANDriveSubsystem;
-import frc.robot.subsystems.CANFuelSubsystem;
+import org.littletonrobotics.junction.networktables.LoggedDashboardChooser;
 
-import static frc.robot.Constants.OperatorConstants.*;
+import com.revrobotics.spark.SparkLowLevel.MotorType;
+import frc.robot.Constants.Mode;
+import frc.robot.commands.DriveCommands;
+import frc.robot.commands.FuelCommands;
+import frc.robot.io.GyroIO;
+import frc.robot.io.MotorIO;
+import frc.robot.io.MotorIOSparkMax;
+import frc.robot.network.RobotPublisher;
+import frc.robot.subsystems.drive.Drive;
+import frc.robot.subsystems.drive.DriveSim;
+import frc.robot.subsystems.drive.DriveWheelSim;
+import frc.robot.subsystems.fuel.Fuel;
+import frc.robot.util.Alerts;
 
-/**
- * This class is where the bulk of the robot should be declared. Since
- * Command-based is a "declarative" paradigm, very little robot logic should
- * actually be handled in the {@link Robot} periodic methods (other than the
- * scheduler calls). Instead, the structure of the robot (including subsystems,
- * commands, and trigger mappings) should be declared here.
- */
 public class RobotContainer {
-    // The robot's subsystems
-    private final CANDriveSubsystem driveSubsystem = new CANDriveSubsystem();
-    private final CANFuelSubsystem fuelSubsystem = new CANFuelSubsystem();
+    // Subsystems
+    private Drive drive;
+    private Fuel fuel;
 
-    // The driver's controller
-    private final CommandXboxController driverController = new CommandXboxController(DRIVER_CONTROLLER_PORT);
+    // Subsystem commands
+    private DriveCommands driveCommands;
+    private FuelCommands fuelCommands;
 
-    // The operator's controller
-    private final CommandXboxController operatorController = new CommandXboxController(OPERATOR_CONTROLLER_PORT);
+    private final CommandPS5Controller controller = new CommandPS5Controller(0); // Main drive controller
 
-    // The autonomous chooser
-    private final SendableChooser<Command> autoChooser = new SendableChooser<>();
+    private final CommandPS5Controller manualController =
+            new CommandPS5Controller(1); // Manual controller for subsystems, for continuous change in PID goal
 
-    /**
-     * The container for the robot. Contains subsystems, OI devices, and commands.
-     */
+    private final CommandPS5Controller testController = new CommandPS5Controller(
+            2); // Test controller for controlling one subsystem at a time, for full manual and PID movements
+
+    private LoggedDashboardChooser<String> testControllerChooser; // Which subsystem the test controller is applied to
+    private LoggedDashboardChooser<String>
+            testControllerManual; // Whether to use manual or PID mode for the test controller
+
+    private LoggedDashboardChooser<String> autoChooser; // Choice of auto
+
+    private RobotPublisher publisher; // Publishes 3D robot data to AdvantageScope for visualization
+
+    // Alerts for disconnected controllers
+    private Alert controllerDisconnected = new Alert("Drive controller is disconnected", AlertType.kWarning);
+    private Alert manualDisconnected = new Alert("Manual controller is disconnected", AlertType.kWarning);
+
     public RobotContainer() {
-        configureBindings();
+        initSubsystems(); // Initialize all the IO objects, subsystems, and mechanism simulators
+        initCommands(); // Initialize command classes
 
-        // Set the options to show up in the Dashboard for selecting auto modes. If you
-        // add additional auto modes you can add additional lines here with
-        // autoChooser.addOption
-        autoChooser.setDefaultOption("Autonomous", new ExampleAuto(driveSubsystem, fuelSubsystem));
+        configureBindings(); // Add drive controller bindings
+
+        configureManualBindings(); // Configure bindings for manual controller
+
+        // Configure bindings for test controller when not in match
+        if (!DriverStation.isFMSAttached()) {
+            configureTestBindings();
+        }
+
+        configureAutoChooser(); // Set up the auto chooser
+
+        if (Constants.driveEnabled) {
+            publisher = new RobotPublisher(drive); // Initialize the 3D data publisher
+        }
     }
 
-    /**
-     * Use this method to define your trigger->command mappings. Triggers can be
-     * created via the {@link Trigger#Trigger(java.util.function.BooleanSupplier)}
-     * constructor with an arbitrary predicate, or via the named factories in
-     * {@link edu.wpi.first.wpilibj2.command.button.CommandGenericHID}'s subclasses
-     * for {@link CommandXboxController Xbox}/
-     * {@link edu.wpi.first.wpilibj2.command.button.CommandPS4Controller PS4}
-     * controllers or
-     * {@link edu.wpi.first.wpilibj2.command.button.CommandJoystick Flight
-     * joysticks}.
-     */
+    private void initSubsystems() {
+        // Initialize tank drive motors and gyro
+        if (Constants.driveEnabled) {
+            // Create variables for drive motors (front = leaders, back = followers) and gyro
+            MotorIO leftFrontMotor, leftBackMotor, rightFrontMotor, rightBackMotor;
+            GyroIO gyro;
+
+            switch (Constants.currentMode) {
+                // If in REAL or SIM mode, use MotorIOSparkMax for motors
+                case REAL:
+                case SIM:
+                    // Create all 4 drive motors - CIM motors are brushed
+                    leftFrontMotor = new MotorIOSparkMax(
+                            Drive.Constants.leftFrontMotorId,
+                            MotorType.kBrushed,
+                            "left front drive motor",
+                            "Drive/LeftFront");
+                    leftBackMotor = new MotorIOSparkMax(
+                            Drive.Constants.leftBackMotorId,
+                            MotorType.kBrushed,
+                            "left back drive motor",
+                            "Drive/LeftBack");
+                    rightFrontMotor = new MotorIOSparkMax(
+                            Drive.Constants.rightFrontMotorId,
+                            MotorType.kBrushed,
+                            "right front drive motor",
+                            "Drive/RightFront");
+                    rightBackMotor = new MotorIOSparkMax(
+                            Drive.Constants.rightBackMotorId,
+                            MotorType.kBrushed,
+                            "right back drive motor",
+                            "Drive/RightBack");
+
+                    // No gyro on kitbot - use empty GyroIO (Drive will use wheel odometry for heading)
+                    gyro = new GyroIO("gyro", "Drive/Gyro");
+                    break;
+                default:
+                    // If in REPLAY, use empty MotorIO objects
+                    leftFrontMotor = new MotorIO("left front drive motor", "Drive/LeftFront");
+                    leftBackMotor = new MotorIO("left back drive motor", "Drive/LeftBack");
+                    rightFrontMotor = new MotorIO("right front drive motor", "Drive/RightFront");
+                    rightBackMotor = new MotorIO("right back drive motor", "Drive/RightBack");
+                    gyro = new GyroIO("gyro", "Drive/Gyro");
+                    break;
+            }
+
+            // Initialize drive subsystem with all 4 motors (Drive configures followers internally)
+            drive = new Drive(gyro, leftFrontMotor, leftBackMotor, rightFrontMotor, rightBackMotor);
+
+            // If mode is SIM, start the simulations for drive wheels and overall drive
+            if (Constants.currentMode == Mode.SIM) {
+                // Only simulate the leader motors - followers copy their output
+                DriveWheelSim leftWheelSim = new DriveWheelSim(leftFrontMotor);
+                DriveWheelSim rightWheelSim = new DriveWheelSim(rightFrontMotor);
+                new DriveSim(leftWheelSim, rightWheelSim, gyro);
+            }
+        }
+
+        // Initialize fuel subsystem motors
+        if (Constants.fuelEnabled) {
+            MotorIO intakeLauncherMotor, feederMotor;
+
+            switch (Constants.currentMode) {
+                case REAL:
+                case SIM:
+                    // Create fuel motors - brushed motors
+                    intakeLauncherMotor = new MotorIOSparkMax(
+                            Fuel.Constants.intakeLauncherMotorId,
+                            MotorType.kBrushed,
+                            "intake launcher motor",
+                            "Fuel/IntakeLauncher");
+                    feederMotor = new MotorIOSparkMax(
+                            Fuel.Constants.feederMotorId, MotorType.kBrushed, "feeder motor", "Fuel/Feeder");
+                    break;
+                default:
+                    // If in REPLAY, use empty MotorIO objects
+                    intakeLauncherMotor = new MotorIO("intake launcher motor", "Fuel/IntakeLauncher");
+                    feederMotor = new MotorIO("feeder motor", "Fuel/Feeder");
+                    break;
+            }
+
+            // Initialize fuel subsystem
+            fuel = new Fuel(intakeLauncherMotor, feederMotor);
+        }
+    }
+
+    private void initCommands() {
+        if (Constants.driveEnabled) {
+            driveCommands = new DriveCommands(drive);
+        }
+        if (Constants.fuelEnabled) {
+            fuelCommands = new FuelCommands(fuel);
+        }
+    }
+
     private void configureBindings() {
+        /* ---- Main controller bindings ---- */
+        /*
+         * Reset gyro: create
+         * Left stick Y: forward/backward
+         * Right stick X: turn
+         * Touchpad: cancel all commands
+         */
 
-        // While the left bumper on operator controller is held, intake Fuel
-        operatorController.leftBumper().whileTrue(new Intake(fuelSubsystem));
-        // While the right bumper on the operator controller is held, spin up for 1
-        // second, then launch fuel. When the button is released, stop.
-        operatorController.rightBumper().whileTrue(new LaunchSequence(fuelSubsystem));
-        // While the A button is held on the operator controller, eject fuel back out
-        // the intake
-        operatorController.a().whileTrue(new Eject(fuelSubsystem));
+        controller.touchpad().onTrue(Commands.runOnce(() -> CommandScheduler.getInstance()
+                .cancelAll()));
 
-        // Set the default command for the drive subsystem to the command provided by
-        // factory with the values provided by the joystick axes on the driver
-        // controller. The Y axis of the controller is inverted so that pushing the
-        // stick away from you (a negative value) drives the robot forwards (a positive
-        // value)
-        driveSubsystem.setDefaultCommand(new Drive(driveSubsystem, driverController));
+        if (Constants.driveEnabled) {
+            controller.create().onTrue(driveCommands.resetGyro());
 
-        fuelSubsystem.setDefaultCommand(fuelSubsystem.run(() -> fuelSubsystem.stop()));
+            /*
+             * Arcade drive using left stick Y for forward/backward and right stick X for turning.
+             * The command runs continuously when either stick is outside its deadband.
+             */
+            controller
+                    .axisMagnitudeGreaterThan(0, Drive.Constants.turnDeadband)
+                    .or(controller.axisMagnitudeGreaterThan(1, Drive.Constants.moveDeadband))
+                    .onTrue(driveCommands.arcadeDrive(() -> -controller.getLeftY(), () -> -controller.getRightX()));
+        }
+
+        // Fuel subsystem bindings
+        if (Constants.fuelEnabled) {
+            // L1: Intake - runs while held
+            controller.L1().whileTrue(fuelCommands.intake());
+
+            // R1: Launch sequence - spin up then launch, runs while held
+            controller.R1().whileTrue(fuelCommands.launchSequence());
+
+            // Cross (X): Eject - runs while held
+            controller.cross().whileTrue(fuelCommands.eject());
+        }
     }
 
-    /**
-     * Use this to pass the autonomous command to the main {@link Robot} class.
-     *
-     * @return the command to run in autonomous
-     */
+    private void configureTestBindings() {
+        /* ---- Test controller bindings ---- */
+        /*
+         * Forward manual/PID: cross
+         * Backward manual/PID: circle
+         */
+        // Initialize dashboard choosers
+        testControllerChooser = new LoggedDashboardChooser<>("Test/Subsystem");
+        testControllerChooser.addOption("Drive", "Drive");
+
+        testControllerManual = new LoggedDashboardChooser<>("Test/Type");
+        testControllerManual.addOption("Manual", "Manual");
+        testControllerManual.addOption("PID", "PID");
+        testControllerManual.addOption("Fast", "Fast");
+
+        if (Constants.driveEnabled) {
+            // Test controller drive control for convenience
+            testController
+                    .axisMagnitudeGreaterThan(0, Drive.Constants.turnDeadband)
+                    .or(testController.axisMagnitudeGreaterThan(1, Drive.Constants.moveDeadband))
+                    .onTrue(driveCommands.arcadeDrive(
+                            () -> -testController.getLeftY(), () -> -testController.getRightX()));
+
+            // Manual duty cycle forward test
+            testController
+                    .cross()
+                    .and(() -> testControllerManual.get().equals("Manual"))
+                    .and(() -> testControllerChooser.get().equals("Drive"))
+                    .onTrue(driveCommands.setArcadeSpeed(0.2, 0))
+                    .onFalse(driveCommands.stop());
+
+            // Manual duty cycle backward test
+            testController
+                    .circle()
+                    .and(() -> testControllerManual.get().equals("Manual"))
+                    .and(() -> testControllerChooser.get().equals("Drive"))
+                    .onTrue(driveCommands.setArcadeSpeed(-0.2, 0))
+                    .onFalse(driveCommands.stop());
+
+            // Manual duty cycle forward test, fast
+            testController
+                    .cross()
+                    .and(() -> testControllerManual.get().equals("Fast"))
+                    .and(() -> testControllerChooser.get().equals("Drive"))
+                    .onTrue(driveCommands.setArcadeSpeed(1, 0))
+                    .onFalse(driveCommands.stop());
+
+            // Manual duty cycle backward test, fast
+            testController
+                    .circle()
+                    .and(() -> testControllerManual.get().equals("Fast"))
+                    .and(() -> testControllerChooser.get().equals("Drive"))
+                    .onTrue(driveCommands.setArcadeSpeed(-1, 0))
+                    .onFalse(driveCommands.stop());
+        }
+    }
+
+    // Bindings for manual control of each of the subsystems (nothing here for drive, add other subsystems)
+    public void configureManualBindings() {}
+
+    // Refresh drive and manual controller disconnect alerts
+    public void refreshControllerAlerts() {
+        controllerDisconnected.set(!controller.isConnected());
+        manualDisconnected.set(!manualController.isConnected());
+    }
+
+    // Initialize dashboard auto chooser
+    public void configureAutoChooser() {
+        autoChooser = new LoggedDashboardChooser<>("AutoSelection");
+        autoChooser.addOption("Left", "Left");
+        autoChooser.addOption("Right", "Right");
+        autoChooser.addDefaultOption("Leave", "Leave");
+    }
+
     public Command getAutonomousCommand() {
-        // An example command will be run in autonomous
-        return autoChooser.getSelected();
+        if (autoChooser.get().equals("Leave")) {
+            // Simple auto: drive forward for 2 seconds then stop
+            return driveCommands
+                    .setArcadeSpeed(0.3, 0)
+                    .andThen(new WaitCommand(2))
+                    .andThen(driveCommands.stop());
+        } else {
+            Alerts.create("Unknown auto specified", AlertType.kWarning);
+            return new InstantCommand();
+        }
+    }
+
+    public void periodic() {
+        if (Constants.driveEnabled) {
+            publisher.publish(); // Publish 3D robot data
+        }
+        refreshControllerAlerts(); // Enable alerts for controller disconnects
     }
 }
