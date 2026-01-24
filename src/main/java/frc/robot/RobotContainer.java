@@ -198,13 +198,13 @@ public class RobotContainer {
         // Fuel subsystem bindings
         if (Constants.fuelEnabled) {
             // L1: Intake - runs while held
-            controller.L1().whileTrue(fuelCommands.intake());
+            controller.triangle().onTrue(fuelCommands.intake()).onFalse(fuelCommands.stopIntake());
 
             // R1: Launch sequence - spin up then launch, runs while held
-            controller.R1().whileTrue(fuelCommands.outtake());
+            controller.L1().onTrue(fuelCommands.feederForward()).onFalse(fuelCommands.stopFeeder());
 
             // Cross (X): Eject - runs while held
-            controller.cross().whileTrue(fuelCommands.stopIntake());
+            controller.R1().onTrue(fuelCommands.feederReverse()).onFalse(fuelCommands.stopFeeder());
         }
     }
 

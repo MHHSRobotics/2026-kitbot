@@ -18,10 +18,10 @@ public class Fuel extends SubsystemBase {
         public static final int feederMotorId = 1;
 
         // Current limits (amps)
-        public static final int motorCurrentLimit = 60;
+        public static final int motorCurrentLimit = 80;
 
         // Voltage values for various fuel operations (tunable via NetworkTables)
-        public static final LoggedNetworkNumber intakePower = new LoggedNetworkNumber("Fuel/IntakePower", 0.5);
+        public static final LoggedNetworkNumber intakePower = new LoggedNetworkNumber("Fuel/IntakePower", 1);
         public static final LoggedNetworkNumber feederPower = new LoggedNetworkNumber("Fuel/FeederPower", 0.5);
         public static final LoggedNetworkNumber launchingFeederVoltage =
                 new LoggedNetworkNumber("Fuel/LaunchingFeederVoltage", 9);
@@ -39,6 +39,7 @@ public class Fuel extends SubsystemBase {
     private MotorIO feederMotor;
 
     public Fuel(MotorIO intakeLauncherMotor, MotorIO feederMotor) {
+
         this.intakeLauncherMotor = intakeLauncherMotor;
         this.feederMotor = feederMotor;
 
