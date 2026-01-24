@@ -14,17 +14,15 @@ import frc.robot.io.MotorIO;
 public class Fuel extends SubsystemBase {
     public static class Constants {
         // Motor CAN IDs
-        public static final int intakeLauncherMotorId = 5;
-        public static final int feederMotorId = 6;
+        public static final int intakeLauncherMotorId = 6;
+        public static final int feederMotorId = 1;
 
         // Current limits (amps)
         public static final int motorCurrentLimit = 60;
 
         // Voltage values for various fuel operations (tunable via NetworkTables)
-        public static final LoggedNetworkNumber intakingFeederVoltage =
-                new LoggedNetworkNumber("Fuel/IntakingFeederVoltage", -12);
-        public static final LoggedNetworkNumber intakingIntakeVoltage =
-                new LoggedNetworkNumber("Fuel/IntakingIntakeVoltage", 10);
+        public static final LoggedNetworkNumber intakePower = new LoggedNetworkNumber("Fuel/IntakePower", 0.5);
+        public static final LoggedNetworkNumber feederPower = new LoggedNetworkNumber("Fuel/FeederPower", 0.5);
         public static final LoggedNetworkNumber launchingFeederVoltage =
                 new LoggedNetworkNumber("Fuel/LaunchingFeederVoltage", 9);
         public static final LoggedNetworkNumber launchingLauncherVoltage =
@@ -62,38 +60,60 @@ public class Fuel extends SubsystemBase {
     }
 
     // Set the intake/launcher roller voltage
-    public void setIntakeLauncherVoltage(double voltage) {
-        intakeLauncherMotor.setVoltage(voltage);
+    public void setIntakePower(double power) {
+        intakeLauncherMotor.setDutyCycle(power);
     }
 
     // Set the feeder roller voltage
-    public void setFeederVoltage(double voltage) {
-        feederMotor.setVoltage(voltage);
+    public void setFeederPower(double power) {
+        feederMotor.setDutyCycle(power);
     }
 
     // Set both rollers for intaking
     public void intake() {
-        setIntakeLauncherVoltage(Constants.intakingIntakeVoltage.get());
-        setFeederVoltage(Constants.intakingFeederVoltage.get());
+        setIntakePower(Constants.intakePower.get());
     }
 
-    // Set both rollers for ejecting (reverse of intake)
-    public void eject() {
-        setIntakeLauncherVoltage(-Constants.intakingIntakeVoltage.get());
-        setFeederVoltage(-Constants.intakingFeederVoltage.get());
+    // Set both rollers for intaking
+    public void outtake() {
+        setIntakePower(-Constants.intakePower.get());
     }
 
-    // Set rollers for spin-up (launcher at full, feeder at reduced power)
-    public void spinUp() {
-        setIntakeLauncherVoltage(Constants.launchingLauncherVoltage.get());
-        setFeederVoltage(Constants.spinUpFeederVoltage.get());
+    public void stopIntake() {
+        setIntakePower(0);
     }
 
-    // Set both rollers for launching
-    public void launch() {
-        setIntakeLauncherVoltage(Constants.launchingLauncherVoltage.get());
-        setFeederVoltage(Constants.launchingFeederVoltage.get());
+    public void stopFeeder() {
+        setFeederPower(0);
     }
+
+    // Set both rollers for intaking
+    public void feederForward() {
+        setFeederPower(Constants.feederPower.get());
+    }
+
+    // Set both rollers for intaking
+    public void feederReverse() {
+        setFeederPower(-Constants.feederPower.get());
+    }
+
+    // // Set both rollers for ejecting (reverse of intake)
+    // public void eject() {
+    //     setIntakeLauncherVoltage(-Constants.intakingIntakeVoltage.get());
+    //     setFeederVoltage(-Constants.intakingFeederVoltage.get());
+    // }
+
+    // // Set rollers for spin-up (launcher at full, feeder at reduced power)
+    // public void spinUp() {
+    //     setIntakeLauncherVoltage(Constants.launchingLauncherVoltage.get());
+    //     setFeederVoltage(Constants.spinUpFeederVoltage.get());
+    // }
+
+    // // Set both rollers for launching
+    // public void launch() {
+    //     setIntakeLauncherVoltage(Constants.launchingLauncherVoltage.get());
+    //     setFeederVoltage(Constants.launchingFeederVoltage.get());
+    // }
 
     // Stop both rollers
     public void stop() {

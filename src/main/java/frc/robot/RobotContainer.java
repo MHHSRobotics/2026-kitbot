@@ -201,10 +201,10 @@ public class RobotContainer {
             controller.L1().whileTrue(fuelCommands.intake());
 
             // R1: Launch sequence - spin up then launch, runs while held
-            controller.R1().whileTrue(fuelCommands.launchSequence());
+            controller.R1().whileTrue(fuelCommands.outtake());
 
             // Cross (X): Eject - runs while held
-            controller.cross().whileTrue(fuelCommands.eject());
+            controller.cross().whileTrue(fuelCommands.stopIntake());
         }
     }
 
@@ -217,6 +217,8 @@ public class RobotContainer {
         // Initialize dashboard choosers
         testControllerChooser = new LoggedDashboardChooser<>("Test/Subsystem");
         testControllerChooser.addOption("Drive", "Drive");
+        testControllerChooser.addOption("Intake", "Intake");
+        testControllerChooser.addOption("Feeder", "Feeder");
 
         testControllerManual = new LoggedDashboardChooser<>("Test/Type");
         testControllerManual.addOption("Manual", "Manual");
@@ -262,6 +264,34 @@ public class RobotContainer {
                     .and(() -> testControllerChooser.get().equals("Drive"))
                     .onTrue(driveCommands.setArcadeSpeed(-1, 0))
                     .onFalse(driveCommands.stop());
+
+            testController
+                    .cross()
+                    .and(() -> testControllerManual.get().equals("Manual"))
+                    .and(() -> testControllerChooser.get().equals("Intake"))
+                    .onTrue(fuelCommands.intake())
+                    .onFalse(fuelCommands.stopIntake());
+
+            testController
+                    .circle()
+                    .and(() -> testControllerManual.get().equals("Manual"))
+                    .and(() -> testControllerChooser.get().equals("Intake"))
+                    .onTrue(fuelCommands.outtake())
+                    .onFalse(fuelCommands.stopIntake());
+
+            testController
+                    .cross()
+                    .and(() -> testControllerManual.get().equals("Manual"))
+                    .and(() -> testControllerChooser.get().equals("Feeder"))
+                    .onTrue(fuelCommands.feederForward())
+                    .onFalse(fuelCommands.stopFeeder());
+
+            testController
+                    .circle()
+                    .and(() -> testControllerManual.get().equals("Manual"))
+                    .and(() -> testControllerChooser.get().equals("Feeder"))
+                    .onTrue(fuelCommands.feederReverse())
+                    .onFalse(fuelCommands.stopFeeder());
         }
     }
 

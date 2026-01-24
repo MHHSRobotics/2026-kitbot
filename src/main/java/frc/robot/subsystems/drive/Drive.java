@@ -67,10 +67,10 @@ public class Drive extends SubsystemBase {
         public static final LoggedNetworkNumber driveKA = new LoggedNetworkNumber("Drive/KA", 0);
 
         // Motor CAN IDs
-        public static final int leftFrontMotorId = 1;
-        public static final int leftBackMotorId = 2;
-        public static final int rightFrontMotorId = 3;
-        public static final int rightBackMotorId = 4;
+        public static final int leftFrontMotorId = 2;
+        public static final int leftBackMotorId = 3;
+        public static final int rightFrontMotorId = 4;
+        public static final int rightBackMotorId = 5;
     }
 
     // Motor controllers for left and right sides (front = leaders, back = followers)
