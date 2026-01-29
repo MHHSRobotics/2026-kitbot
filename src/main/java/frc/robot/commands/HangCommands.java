@@ -1,26 +1,26 @@
 package frc.robot.commands;
 
-import frc.robot.subsystems.hang.Hang;
-
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
+
+import frc.robot.subsystems.hang.Hang;
 
 public class HangCommands {
     private Hang hang;
 
-    public HangCommands(Hang hang){
+    public HangCommands(Hang hang) {
         this.hang = hang;
     }
 
-    public Command moveUp(){
+    public Command moveUp() {
         return new InstantCommand(() -> hang.setSpeedLeft(1), hang);
     }
 
-    public Command moveDown(){
+    public Command moveDown() {
         return new InstantCommand(() -> hang.setSpeedLeft(-1), hang);
     }
 
-    public Command stop(){
+    public Command stop() {
         return new InstantCommand(() -> hang.setSpeedLeft(0), hang);
     }
 }

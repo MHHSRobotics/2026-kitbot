@@ -56,13 +56,12 @@ public class Hang extends SubsystemBase {
     public void setSpeed(double speed) {
         motorR.setDutyCycle(speed);
         motorL.setDutyCycle(speed);
-    }    
+    }
 
-    public void inverse(){
-        if (invert = false){
+    public void inverse() {
+        if (invert = false) {
             invert = true;
-        }
-        else{
+        } else {
             invert = false;
         }
         motorL.setInverted(invert);
