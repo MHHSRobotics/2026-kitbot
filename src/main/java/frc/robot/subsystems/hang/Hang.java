@@ -59,7 +59,7 @@ public class Hang extends SubsystemBase {
     }
 
     public void inverse() {
-        if (invert = false) {
+        if (invert == false) {
             invert = true;
         } else {
             invert = false;
