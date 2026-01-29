@@ -13,14 +13,17 @@ public class HangCommands {
     }
 
     public Command moveUp() {
-        return new InstantCommand(() -> hang.setSpeedLeft(1), hang);
+        return new InstantCommand(() -> hang.setSpeedLeft(1), hang)
+                .andThen(new InstantCommand(() -> hang.setSpeedRight(1), hang));
     }
 
     public Command moveDown() {
-        return new InstantCommand(() -> hang.setSpeedLeft(-1), hang);
+        return new InstantCommand(() -> hang.setSpeedLeft(-1), hang)
+                .andThen(new InstantCommand(() -> hang.setSpeedRight(-1), hang));
     }
 
     public Command stop() {
-        return new InstantCommand(() -> hang.setSpeedLeft(0), hang);
+        return new InstantCommand(() -> hang.setSpeedLeft(0), hang)
+                .andThen(new InstantCommand(() -> hang.setSpeedRight(0), hang));
     }
 }
