@@ -28,6 +28,8 @@ public class Hang extends SubsystemBase {
     private MotorIO motorR;
     private MotorIO motorL;
 
+    public boolean invert = false;
+
     public Hang(MotorIO motorIO) {
         motorR.setInverted(Constants.motorInverted);
         motorL.setInverted(Constants.motorInverted);
@@ -45,6 +47,26 @@ public class Hang extends SubsystemBase {
 
     public void setSpeedLeft(double speed) {
         motorL.setDutyCycle(speed);
+    }
+
+    public void setSpeedRight(double speed) {
+        motorR.setDutyCycle(speed);
+    }
+
+    public void setSpeed(double speed) {
+        motorR.setDutyCycle(speed);
+        motorL.setDutyCycle(speed);
+    }    
+
+    public void inverse(){
+        if (invert = false){
+            invert = true;
+        }
+        else{
+            invert = false;
+        }
+        motorL.setInverted(invert);
+        motorR.setInverted(invert);
     }
 
     @Override
