@@ -59,11 +59,6 @@ public class Hang extends SubsystemBase {
         motorL.setDutyCycle(speed);
     }
 
-    public void inverse(double speed) {
-        motorL.setDutyCycle(speed);
-        motorR.setDutyCycle(speed);
-    }
-
     @Override
     public void periodic() {
         // This runs every robot loop (about 50 times per second) to update sensors and check for problems
