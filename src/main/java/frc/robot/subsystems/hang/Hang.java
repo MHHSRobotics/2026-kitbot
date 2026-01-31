@@ -3,14 +3,18 @@ package frc.robot.subsystems.hang;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import org.littletonrobotics.junction.networktables.LoggedNetworkBoolean;
+import edu.wpi.first.wpilibj.DigitalInput;
 
 import frc.robot.io.MotorIO;
 
 public class Hang extends SubsystemBase {
     public static class Constants {
-        // CAN device ID for the hang motor controller
+        // CAN device ID for the hang motor controller, and Digital input sensors initialized.
+        private DigitalInput irSensor1;
+        private DigitalInput irSensor2;
+        private DigitalInput irSensor3;
         public static final int motorId = 0;
-        
+
         // Whether to flip motor direction (true means reverse forward/backward)
         public static final boolean motorInverted = false;
 
