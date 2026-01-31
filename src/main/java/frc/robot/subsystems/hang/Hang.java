@@ -10,6 +10,7 @@ public class Hang extends SubsystemBase {
     public static class Constants {
         // CAN device ID for the hang motor controller
         public static final int motorId = 0;
+        
         // Whether to flip motor direction (true means reverse forward/backward)
         public static final boolean motorInverted = false;
 
@@ -58,14 +59,9 @@ public class Hang extends SubsystemBase {
         motorL.setDutyCycle(speed);
     }
 
-    public void inverse() {
-        if (invert = false) {
-            invert = true;
-        } else {
-            invert = false;
-        }
-        motorL.setInverted(invert);
-        motorR.setInverted(invert);
+    public void inverse(double speed) {
+        motorL.setDutyCycle(speed);
+        motorR.setDutyCycle(speed);
     }
 
     @Override
