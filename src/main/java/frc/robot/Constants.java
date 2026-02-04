@@ -45,6 +45,6 @@ public final class Constants {
     public static final boolean simIsRedAlliance = false; // Whether simulated FMS is on red alliance
 
     // Toggles for subsystems
-    public static final boolean driveEnabled = true;
+    public static final boolean driveEnabled = false;
     public static final boolean fuelEnabled = true;
 }

@@ -19,6 +19,7 @@ import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
 import com.ctre.phoenix6.SignalLogger;
+import com.revrobotics.util.StatusLogger;
 
 import org.littletonrobotics.junction.LogFileUtil;
 import org.littletonrobotics.junction.LoggedRobot;
@@ -86,6 +87,9 @@ public class Robot extends LoggedRobot {
 
         // Disable automatic Hoot logging
         SignalLogger.enableAutoLogging(false);
+
+        // Disable REV automatic logging
+        StatusLogger.disableAutoLogging();
 
         // Adjust loop overrun warning timeout
         try {
